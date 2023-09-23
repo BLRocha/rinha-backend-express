@@ -1,0 +1,85 @@
+services:
+  redis:
+    image: redis:latest
+    command: redis-server --save "" --appendonly no
+    ports:
+      - "6379:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.05" # 0.1
+          memory: "0.5GB"
+    networks:
+      - posttest
+  postgres:
+    image: postgres
+    environment:
+      - POSTGRES_PASSWORD=123
+      - POSTGRES_DB=rinha
+    ports:
+      - "5432:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.7' # 0.6
+          memory: '1.5GB'
+    networks:
+      - posttest
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./postgresql.conf:/docker-entrypoint-initdb.d/postgresql.conf
+    command: postgres -c config_file=/docker-entrypoint-initdb.d/postgresql.conf
+  app1: &api
+    build: .
+    hostname: app1
+    ports:
+      - :3000
+    networks:
+      - posttest
+    restart: on-failure:10
+    depends_on:
+      - postgres
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3' # 0.3
+          memory: '0.6GB'
+  app2:
+    <<: *api
+    hostname: app2
+    ports:
+      - :3000
+    networks:
+      - posttest
+    restart: on-failure:10
+    depends_on:
+      - postgres
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3' # 03 375
+          memory: '0.6GB'
+  
+  nginx:
+    image: nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.15' # 0.2
+          memory: '0.5GB'
+    ports:
+      - '9999:9999'
+    networks:
+      - posttest
+    restart: on-failure:10
+    depends_on:
+      - app1
+      - app2
+networks:
+  posttest:
+
+version: '3.8'
